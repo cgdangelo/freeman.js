@@ -1,0 +1,34 @@
+{
+  "name": "freeman",
+  "version": "0.0.0",
+  "description": "Source/GoldSrc server query library",
+  "main": "freeman.js",
+  "dependencies": {
+    "binary-parser": "~1.1.0"
+  },
+  "devDependencies": {
+    "coffee-script": "^1.7.1",
+    "gulp": "~3.6.0",
+    "gulp-coffee": "~1.4.1",
+    "gulp-coffeelint": "~0.3.1",
+    "gulp-plumber": "~0.5.6",
+    "gulp-watch": "~0.5.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cgdangelo/freeman.js"
+  },
+  "keywords": [
+    "half-life",
+    "hl1",
+    "hl2",
+    "goldsrc",
+    "source"
+  ],
+  "author": "Charles D'Angelo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cgdangelo/freeman.js/issues"
+  },
+  "homepage": "https://github.com/cgdangelo/freeman.js"
+}
