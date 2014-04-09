@@ -7,15 +7,15 @@ var gulp    = require('gulp'),
     watch   = require('gulp-watch');
 
 gulp.task('scripts', function() {
-  gulp.src('freeman.coffee').
+  gulp.src('src/freeman.coffee').
   pipe(watch()).
   pipe(plumber()).
   pipe(lint()).
   pipe(coffee()).
-  pipe(gulp.dest('./')).
+  pipe(gulp.dest('./dist/')).
   pipe(uglify()).
   pipe(rename('freeman.min.js')).
-  pipe(gulp.dest('./'));
+  pipe(gulp.dest('./dist/'));
 });
 
 gulp.task('default', ['scripts']);

@@ -2,7 +2,7 @@
   "name": "freeman",
   "version": "0.0.0",
   "description": "Source/GoldSrc server query library",
-  "main": "freeman.js",
+  "main": "dist/freeman.js",
   "dependencies": {
     "binary-parser": "~1.1.0",
     "ref": "^0.1.3"
