@@ -140,4 +140,8 @@
     });
   };
 
+  module.exports = {
+    info: info
+  };
+
 }).call(this);

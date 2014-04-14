@@ -112,3 +112,5 @@ info = (host, port, cb) ->
       unpacked.game_id64 = unpacked.game_id64.readUInt64LE()
 
     cb unpacked
+
+module.exports = info: info
