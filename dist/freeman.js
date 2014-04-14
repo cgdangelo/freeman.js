@@ -59,10 +59,7 @@
     var parser, source_tv, the_ship;
     the_ship = new Parser().endianess('little').uint8('mode').uint8('witnesses').uint8('duration');
     source_tv = new Parser().int16le('port').ztstring('name');
-    parser = new Parser().endianess('little').array('prefix', {
-      type: 'uint8',
-      length: 4
-    }).uint8('header').uint8('protocol_version').ztstring('name').ztstring('map').ztstring('folder').ztstring('game').int16('game_id').uint8('players').uint8('max_players').uint8('bots').uint8('server_type').uint8('environment').uint8('visibility').uint8('vac').choice('the_ship', {
+    parser = new Parser().endianess('little').uint32('prefix').uint8('header').uint8('protocol_version').ztstring('name').ztstring('map').ztstring('folder').ztstring('game').int16('game_id').uint8('players').uint8('max_players').uint8('bots').uint8('server_type').uint8('environment').uint8('visibility').uint8('vac').choice('the_ship', {
       tag: function() {
         if ([2400, 2401, 2402, 2412].indexOf(this.game_id) !== -1) {
           return 1;

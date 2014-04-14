@@ -53,7 +53,7 @@ info = (host, port, cb) ->
 
   parser = new Parser().
     endianess('little').
-    array('prefix', type: 'uint8', length: 4).
+    uint32('prefix').
     uint8('header').
     uint8('protocol_version').
     ztstring('name').
