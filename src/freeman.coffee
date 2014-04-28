@@ -3,40 +3,32 @@
 dgram    = require 'dgram'
 Parser   = require('binary-parser').Parser
 ref      = require 'ref'
-udp      = null
-
-PACKETS =
-  PREFIX: '\xFF\xFF\xFF\xFF'
-  REQUESTS:
-    A2S_INFO:
-      HEADER: '\x54'
-      PAYLOAD: 'Source Engine Query'
 
 Parser::ztstring = (name, options = {}) ->
   options.zeroTerminated = true
   @.string name, options
 
-createUDP = (cb) =>
+createUDP = (cb) ->
   udp = dgram.createSocket 'udp4'
 
   udp.on 'error', (err) ->
     udp.close()
     throw err
 
-  udp.on 'message', cb
+  udp.on 'message', (response) ->
+    cb response
 
   udp
 
-buildPacket = (requestType) ->
+buildPacket = (payload) ->
   Buffer.concat [
-    new Buffer(PACKETS.PREFIX, 'binary'),
-    new Buffer(PACKETS.REQUESTS[requestType].HEADER, 'binary'),
-    new Buffer(PACKETS.REQUESTS[requestType].PAYLOAD, 'binary'),
+    new Buffer('\xFF\xFF\xFF\xFF', 'binary'),
+    payload,
     new Buffer('\x00', 'binary')
   ]
 
 sendPacket = (host, port, packet, cb) ->
-  udp ?= createUDP cb
+  udp = createUDP cb
   udp.send packet, 0, packet.length, port, host, (err, data) ->
     throw err if err?
 
@@ -97,12 +89,14 @@ info = (host, port, cb) ->
       defaultChoice: ->
     ).
     choice('game_id64',
-      tag: -> 1 if !! @.edf & 0x01
+      tag: -> 1 if !!(@.edf & 0x01)
       choices: 1: new Parser().buffer null, length: 8
       defaultChoice: ->
     )
 
-  sendPacket host, port, buildPacket('A2S_INFO'), (msg, rinfo) ->
+  payload = new Buffer '\x54Source Engine Query', 'binary'
+
+  sendPacket host, port, buildPacket(payload), (msg, rinfo) ->
     unpacked = parser.parse msg
 
     if unpacked.steam_id? and Buffer.isBuffer unpacked.steam_id

@@ -1,24 +1,12 @@
 (function() {
   'use strict';
-  var PACKETS, Parser, buildPacket, createUDP, dgram, info, ref, sendPacket, udp;
+  var Parser, buildPacket, createUDP, dgram, info, ref, sendPacket;
 
   dgram = require('dgram');
 
   Parser = require('binary-parser').Parser;
 
   ref = require('ref');
-
-  udp = null;
-
-  PACKETS = {
-    PREFIX: '\xFF\xFF\xFF\xFF',
-    REQUESTS: {
-      A2S_INFO: {
-        HEADER: '\x54',
-        PAYLOAD: 'Source Engine Query'
-      }
-    }
-  };
 
   Parser.prototype.ztstring = function(name, options) {
     if (options == null) {
@@ -28,26 +16,26 @@
     return this.string(name, options);
   };
 
-  createUDP = (function(_this) {
-    return function(cb) {
-      udp = dgram.createSocket('udp4');
-      udp.on('error', function(err) {
-        udp.close();
-        throw err;
-      });
-      udp.on('message', cb);
-      return udp;
-    };
-  })(this);
+  createUDP = function(cb) {
+    var udp;
+    udp = dgram.createSocket('udp4');
+    udp.on('error', function(err) {
+      udp.close();
+      throw err;
+    });
+    udp.on('message', function(response) {
+      return cb(response);
+    });
+    return udp;
+  };
 
-  buildPacket = function(requestType) {
-    return Buffer.concat([new Buffer(PACKETS.PREFIX, 'binary'), new Buffer(PACKETS.REQUESTS[requestType].HEADER, 'binary'), new Buffer(PACKETS.REQUESTS[requestType].PAYLOAD, 'binary'), new Buffer('\x00', 'binary')]);
+  buildPacket = function(payload) {
+    return Buffer.concat([new Buffer('\xFF\xFF\xFF\xFF', 'binary'), payload, new Buffer('\x00', 'binary')]);
   };
 
   sendPacket = function(host, port, packet, cb) {
-    if (udp == null) {
-      udp = createUDP(cb);
-    }
+    var udp;
+    udp = createUDP(cb);
     return udp.send(packet, 0, packet.length, port, host, function(err, data) {
       if (err != null) {
         throw err;
@@ -56,7 +44,7 @@
   };
 
   info = function(host, port, cb) {
-    var parser, source_tv, the_ship;
+    var parser, payload, source_tv, the_ship;
     the_ship = new Parser().endianess('little').uint8('mode').uint8('witnesses').uint8('duration');
     source_tv = new Parser().int16le('port').ztstring('name');
     parser = new Parser().endianess('little').uint32('prefix').uint8('header').uint8('protocol_version').ztstring('name').ztstring('map').ztstring('folder').ztstring('game').int16('game_id').uint8('players').uint8('max_players').uint8('bots').uint8('server_type').uint8('environment').uint8('visibility').uint8('vac').choice('the_ship', {
@@ -113,7 +101,7 @@
       defaultChoice: function() {}
     }).choice('game_id64', {
       tag: function() {
-        if (!!this.edf & 0x01) {
+        if (!!(this.edf & 0x01)) {
           return 1;
         }
       },
@@ -124,7 +112,8 @@
       },
       defaultChoice: function() {}
     });
-    return sendPacket(host, port, buildPacket('A2S_INFO'), function(msg, rinfo) {
+    payload = new Buffer('\x54Source Engine Query', 'binary');
+    return sendPacket(host, port, buildPacket(payload), function(msg, rinfo) {
       var unpacked;
       unpacked = parser.parse(msg);
       if ((unpacked.steam_id != null) && Buffer.isBuffer(unpacked.steam_id)) {
