@@ -4,7 +4,6 @@
   "description": "Source/GoldSrc server query library",
   "main": "dist/freeman.js",
   "dependencies": {
-    "binary-parser": "~1.1.0",
     "ref": "^0.1.3"
   },
   "devDependencies": {
