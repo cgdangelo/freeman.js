@@ -1,110 +1,226 @@
 'use strict'
 
-dgram    = require 'dgram'
-Parser   = require('binary-parser').Parser
-ref      = require 'ref'
+dgram = require 'dgram'
+ref = require 'ref'
+udp = dgram.createSocket 'udp4'
 
-Parser::ztstring = (name, options = {}) ->
-  options.zeroTerminated = true
-  @.string name, options
+ztstring = (packet, offset) ->
+  str = ''
+  while true
+    char = packet.readUInt8 offset
+    offset += 1
 
-createUDP = (cb) ->
-  udp = dgram.createSocket 'udp4'
+    break if char is 0
 
+    str += String.fromCharCode char
+
+  str
+
+parseInfo = (packet) ->
+  parsed = {}
+
+  # Skip the prefix
+  offset = 4
+
+  parsed.header = String.fromCharCode packet.readUInt8 offset
+  offset += 1
+
+  if parsed.header is 'I'
+    parsed.protocol = packet.readUInt8 offset
+    offset += 1
+
+    parsed.name = ztstring packet, offset
+    offset += parsed.name.length + 1
+
+    parsed.map = ztstring packet, offset
+    offset += parsed.map.length + 1
+
+    parsed.folder = ztstring packet, offset
+    offset += parsed.folder.length + 1
+
+    parsed.game = ztstring packet, offset
+    offset += parsed.game.length + 1
+
+    parsed.app_id = packet.readInt16LE offset
+    offset += 2
+
+    parsed.players = packet.readUInt8 offset
+    offset += 1
+
+    parsed.max_players = packet.readUInt8 offset
+    offset += 1
+
+    parsed.bots = packet.readUInt8 offset
+    offset += 1
+
+    parsed.server_type = String.fromCharCode packet.readUInt8 offset
+    parsed.server_type = switch String.fromCharCode packet.readUInt8 offset
+      when 'd' then 'dedicated'
+      when 'l' then 'listen'
+      when 'p' then 'hltv'
+    offset += 1
+
+    parsed.environment = switch String.fromCharCode packet.readUInt8 offset
+      when 'l' then 'linux'
+      when 'w' then 'windows'
+      when 'm', 'o' then 'mac'
+    offset += 1
+
+    parsed.visibility = if packet.readUInt8(offset) is 0 then 'public' else 'private'
+    offset += 1
+
+    parsed.vac = switch packet.readUInt8(offset)
+      when 0 then 'unsecured'
+      when 1 then 'secured'
+    offset += 1
+
+    # Check if game is "The Ship"
+    if [2400, 2401, 2402, 2412].indexOf(parsed.app_id) isnt -1
+      parsed.mode = switch packet.readUInt8 offset
+        when 0 then 'Hunt'
+        when 1 then 'Elimination'
+        when 2 then 'Duel'
+        when 3 then 'Deathmatch'
+        when 4 then 'VIP Team'
+        when 5 then 'Team Elimination'
+      offset += 1
+
+      parsed.witnesses = packet.readUInt8 offset
+      offset += 1
+
+      parsed.duration = packet.readUInt8 offset
+      offset += 1
+
+    parsed.version = ztstring packet, offset
+    offset += parsed.version.length + 1
+
+    edf = packet.readUInt8 offset, true
+    if edf?
+      parsed.edf = edf
+      offset += 1
+
+      if !!(parsed.edf & 0x80)
+        parsed.port = packet.readInt16LE offset
+        offset += 2
+
+      if !!(parsed.edf & 0x10)
+        parsed.steam_id = packet.readUInt64LE offset
+        offset += 8
+
+      # This conditional passes for HLTVs?
+      if !!(parsed.edf & 0x40)
+        parsed.source_tv = {}
+
+        parsed.source_tv.port = packet.readInt16LE offset
+        offset += 2
+
+        parsed.source_tv.name = ztstring packet, offset
+        offset += parsed.source_tv.name.length + 1
+
+      if !!(parsed.edf & 0x20)
+        keywords = ztstring packet, offset
+        parsed.keywords = keywords.split ','
+        offset += keywords.length + 1
+
+      if !!(parsed.edf & 0x01)
+        parsed.app_id64 = packet.readUInt64LE offset
+        offset += 8
+
+  else if parsed.header is 'm'
+
+    # This is the obsolete GoldSrc response. It's also one of the
+    # two response packets from HLTV servers?
+    parsed.address = ztstring packet, offset
+    offset += parsed.address.length + 1
+
+    parsed.name = ztstring packet, offset
+    offset += parsed.name.length + 1
+
+    parsed.map = ztstring packet, offset
+    offset += parsed.map.length + 1
+
+    parsed.folder = ztstring packet, offset
+    offset += parsed.folder.length + 1
+
+    parsed.game = ztstring packet, offset
+    offset += parsed.game.length + 1
+
+    parsed.players = packet.readUInt8 offset
+    offset += 1
+
+    parsed.server_type = switch String.fromCharCode packet.readUInt8 offset
+      when 'd' then 'dedicated'
+      when 'l' then 'listen'
+      when 'p' then 'hltv'
+    offset += 1
+
+    parsed.environment = switch String.fromCharCode packet.readUInt8 offset
+      when 'l' then 'linux'
+      when 'w' then 'windows'
+      when 'm', 'o' then 'mac'
+    offset += 1
+
+    parsed.visibility = switch packet.readUInt8(offset)
+      when 0 then 'public'
+      when 1 then 'private'
+    offset += 1
+
+    parsed.mod = switch packet.readUInt8 offset
+      when 0 then 'hl'
+      when 1 then 'mod'
+    offset += 1
+
+    if parsed.mod is 'mod'
+      parsed.mod_info = {}
+
+      parsed.mod_info.link = ztstring packet, offset
+      offset += parsed.mod_info.link.length
+
+      parsed.mod_info.download_link = ztstring packet, offset
+      offset += parsed.mod_info.download_link.length
+
+      # Skip null byte
+      offset += 1
+
+      parsed.mod_info.version = packet.readInt32LE offset
+      offset += 2
+
+      parsed.mod_info.size = packet.readInt32LE offset
+      offset += 2
+
+      parsed.mod_info.type = switch packet.readUInt8 offset
+        when 0 then 'sp'
+        when 1 then 'mp'
+      offset += 1
+
+      parsed.mod_info.dll = switch packet.readUInt8 offset
+        when 0 then 'hl'
+        when 1 then 'custom'
+      offset += 1
+
+    parsed.vac = switch packet.readUInt8(offset)
+      when 0 then 'unsecured'
+      when 1 then 'secured'
+    offset += 1
+
+    parsed.bots = packet.readUInt8 offset
+    offset += 1
+
+  parsed
+
+info = (host, port, callback) ->
   udp.on 'error', (err) ->
-    udp.close()
-    throw err
+    throw err if err?
 
   udp.on 'message', (response) ->
-    cb response
+    callback parseInfo response
 
-  udp
-
-buildPacket = (payload) ->
-  Buffer.concat [
+  packet = Buffer.concat [
     new Buffer('\xFF\xFF\xFF\xFF', 'binary'),
-    payload,
+    new Buffer('\x54Source Engine Query', 'binary'),
     new Buffer('\x00', 'binary')
   ]
 
-sendPacket = (host, port, packet, cb) ->
-  udp = createUDP cb
-  udp.send packet, 0, packet.length, port, host, (err, data) ->
-    throw err if err?
-
-info = (host, port, cb) ->
-  the_ship = new Parser().
-    endianess('little').
-    uint8('mode').
-    uint8('witnesses').
-    uint8('duration')
-
-  source_tv = new Parser().
-    int16le('port').
-    ztstring('name')
-
-  parser = new Parser().
-    endianess('little').
-    uint32('prefix').
-    uint8('header').
-    uint8('protocol_version').
-    ztstring('name').
-    ztstring('map').
-    ztstring('folder').
-    ztstring('game').
-    int16('game_id').
-    uint8('players').
-    uint8('max_players').
-    uint8('bots').
-    uint8('server_type').
-    uint8('environment').
-    uint8('visibility').
-    uint8('vac').
-    choice('the_ship',
-      tag: ->
-        1 if [2400, 2401, 2402, 2412].indexOf(@.game_id) isnt -1
-      choices: 1: the_ship
-      defaultChoice: ->
-    ).
-    ztstring('game_version').
-    uint8('edf').
-    choice('port',
-      tag: -> 1 if !!(@.edf & 0x80)
-      choices: 1: 'int16le'
-      defaultChoice: ->
-    ).
-    choice('steam_id',
-      tag: -> 1 if !!(@.edf & 0x10)
-      choices: 1: new Parser().buffer null, length: 8
-      defaultChoice: ->
-    ).
-    choice('source_tv',
-      tag: -> 1 if !!(@.edf & 0x40)
-      choices: 1: source_tv
-      defaultChoice: ->
-    ).
-    choice('keywords',
-      tag: -> 1 if !!(@.edf & 0x20)
-      choices: 1: new Parser().ztstring()
-      defaultChoice: ->
-    ).
-    choice('game_id64',
-      tag: -> 1 if !!(@.edf & 0x01)
-      choices: 1: new Parser().buffer null, length: 8
-      defaultChoice: ->
-    )
-
-  payload = new Buffer '\x54Source Engine Query', 'binary'
-
-  sendPacket host, port, buildPacket(payload), (msg, rinfo) ->
-    unpacked = parser.parse msg
-
-    if unpacked.steam_id? and Buffer.isBuffer unpacked.steam_id
-      unpacked.steam_id = unpacked.steam_id.readUInt64LE()
-
-    if unpacked.game_id64? and Buffer.isBuffer unpacked.game_id64
-      unpacked.game_id64 = unpacked.game_id64.readUInt64LE()
-
-    cb unpacked
+  udp.send packet, 0, packet.length, port, host
 
 module.exports = info: info
