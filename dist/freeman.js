@@ -1,6 +1,6 @@
 (function() {
   'use strict';
-  var dgram, info, parseInfo, ref, udp, ztstring;
+  var challenge, dgram, info, parseChallenge, parseInfo, ref, send, udp, ztstring;
 
   dgram = require('dgram');
 
@@ -236,6 +236,24 @@
   };
 
   info = function(host, port, callback) {
+    return send(host, port, new Buffer('\x54Source Engine Query', 'binary'), parseInfo, callback);
+  };
+
+  parseChallenge = function(packet) {
+    var offset, parsed;
+    parsed = {};
+    offset = 4;
+    parsed.header = String.fromCharCode(packet.readUInt8(offset));
+    offset += 1;
+    parsed.challenge = packet.readInt32LE(offset);
+    return parsed;
+  };
+
+  challenge = function(host, port, callback) {
+    return send(host, port, new Buffer('\x55\xFF\xFF\xFF\xFF', 'binary'), parseChallenge, callback);
+  };
+
+  send = function(host, port, data, parser, callback) {
     var packet;
     udp.on('error', function(err) {
       if (err != null) {
@@ -243,14 +261,15 @@
       }
     });
     udp.on('message', function(response) {
-      return callback(parseInfo(response));
+      return callback(parser(response));
     });
-    packet = Buffer.concat([new Buffer('\xFF\xFF\xFF\xFF', 'binary'), new Buffer('\x54Source Engine Query', 'binary'), new Buffer('\x00', 'binary')]);
+    packet = Buffer.concat([new Buffer('\xFF\xFF\xFF\xFF', 'binary'), data, new Buffer('\x00', 'binary')]);
     return udp.send(packet, 0, packet.length, port, host);
   };
 
   module.exports = {
-    info: info
+    info: info,
+    challenge: challenge
   };
 
 }).call(this);

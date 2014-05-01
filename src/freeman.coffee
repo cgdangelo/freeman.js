@@ -209,18 +209,41 @@ parseInfo = (packet) ->
   parsed
 
 info = (host, port, callback) ->
+  send host, port,
+    new Buffer('\x54Source Engine Query', 'binary'),
+    parseInfo, callback
+
+parseChallenge = (packet) ->
+  parsed = {}
+
+  # Skip the prefix
+  offset = 4
+
+  parsed.header = String.fromCharCode packet.readUInt8 offset
+  offset += 1
+
+  parsed.challenge = packet.readInt32LE offset
+
+  parsed
+
+challenge = (host, port, callback) ->
+  send host, port,
+    new Buffer('\x55\xFF\xFF\xFF\xFF', 'binary'),
+    parseChallenge, callback
+
+send = (host, port, data, parser, callback) ->
   udp.on 'error', (err) ->
     throw err if err?
 
   udp.on 'message', (response) ->
-    callback parseInfo response
+    callback parser response
 
   packet = Buffer.concat [
     new Buffer('\xFF\xFF\xFF\xFF', 'binary'),
-    new Buffer('\x54Source Engine Query', 'binary'),
+    data,
     new Buffer('\x00', 'binary')
   ]
 
   udp.send packet, 0, packet.length, port, host
 
-module.exports = info: info
+module.exports = info: info, challenge: challenge
