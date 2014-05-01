@@ -1,12 +1,10 @@
 (function() {
   'use strict';
-  var challenge, dgram, info, parseChallenge, parseInfo, ref, send, udp, ztstring;
+  var challenge, dgram, info, parseChallenge, parseInfo, parsePlayer, player, ref, send, ztstring;
 
   dgram = require('dgram');
 
   ref = require('ref');
-
-  udp = dgram.createSocket('udp4');
 
   ztstring = function(packet, offset) {
     var char, str;
@@ -193,9 +191,9 @@
       if (parsed.mod === 'mod') {
         parsed.mod_info = {};
         parsed.mod_info.link = ztstring(packet, offset);
-        offset += parsed.mod_info.link.length;
+        offset += parsed.mod_info.link.length + 1;
         parsed.mod_info.download_link = ztstring(packet, offset);
-        offset += parsed.mod_info.download_link.length;
+        offset += parsed.mod_info.download_link.length + 1;
         offset += 1;
         parsed.mod_info.version = packet.readInt32LE(offset);
         offset += 2;
@@ -253,14 +251,52 @@
     return send(host, port, new Buffer('\x55\xFF\xFF\xFF\xFF', 'binary'), parseChallenge, callback);
   };
 
+  parsePlayer = function(packet) {
+    var i, offset, parsed, player;
+    parsed = {};
+    offset = 4;
+    parsed.header = String.fromCharCode(packet.readUInt8(offset));
+    offset += 1;
+    parsed.num_players = packet.readUInt8(offset);
+    offset += 1;
+    parsed.players = (function() {
+      var _i, _ref, _results;
+      _results = [];
+      for (i = _i = 0, _ref = parsed.num_players - 1; 0 <= _ref ? _i <= _ref : _i >= _ref; i = 0 <= _ref ? ++_i : --_i) {
+        player = {};
+        player.index = packet.readUInt8(offset);
+        offset += 1;
+        player.name = ztstring(packet, offset);
+        offset += player.name.length + 1;
+        player.score = packet.readInt32LE(offset);
+        offset += 4;
+        player.duration = packet.readInt32LE(offset);
+        offset += 4;
+        _results.push(player);
+      }
+      return _results;
+    })();
+    return parsed;
+  };
+
+  player = function(host, port, challenge, callback) {
+    var buffer;
+    buffer = new Buffer(5);
+    buffer.writeUInt8(0x55, 0);
+    buffer.writeInt32LE(challenge, 1);
+    return send(host, port, buffer, parsePlayer, callback);
+  };
+
   send = function(host, port, data, parser, callback) {
-    var packet;
+    var packet, udp;
+    udp = dgram.createSocket('udp4');
     udp.on('error', function(err) {
       if (err != null) {
         throw err;
       }
     });
     udp.on('message', function(response) {
+      udp.close();
       return callback(parser(response));
     });
     packet = Buffer.concat([new Buffer('\xFF\xFF\xFF\xFF', 'binary'), data, new Buffer('\x00', 'binary')]);
@@ -269,7 +305,8 @@
 
   module.exports = {
     info: info,
-    challenge: challenge
+    challenge: challenge,
+    player: player
   };
 
 }).call(this);

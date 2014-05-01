@@ -2,7 +2,6 @@
 
 dgram = require 'dgram'
 ref = require 'ref'
-udp = dgram.createSocket 'udp4'
 
 ztstring = (packet, offset) ->
   str = ''
@@ -174,10 +173,10 @@ parseInfo = (packet) ->
       parsed.mod_info = {}
 
       parsed.mod_info.link = ztstring packet, offset
-      offset += parsed.mod_info.link.length
+      offset += parsed.mod_info.link.length + 1
 
       parsed.mod_info.download_link = ztstring packet, offset
-      offset += parsed.mod_info.download_link.length
+      offset += parsed.mod_info.download_link.length + 1
 
       # Skip null byte
       offset += 1
@@ -231,11 +230,53 @@ challenge = (host, port, callback) ->
     new Buffer('\x55\xFF\xFF\xFF\xFF', 'binary'),
     parseChallenge, callback
 
+parsePlayer = (packet) ->
+  parsed = {}
+
+  # Skip the prefix
+  offset = 4
+
+  parsed.header = String.fromCharCode packet.readUInt8 offset
+  offset += 1
+
+  parsed.num_players = packet.readUInt8 offset
+  offset += 1
+
+  parsed.players = (for i in [0..parsed.num_players-1]
+    player = {}
+
+    player.index = packet.readUInt8 offset
+    offset += 1
+
+    player.name = ztstring packet, offset
+    offset += player.name.length + 1
+
+    player.score = packet.readInt32LE offset
+    offset += 4
+
+    player.duration = packet.readInt32LE offset
+    offset += 4
+
+    player
+  )
+
+  parsed
+
+player = (host, port, challenge, callback) ->
+  buffer = new Buffer 5
+  buffer.writeUInt8 0x55, 0
+  buffer.writeInt32LE challenge, 1
+
+  send host, port, buffer, parsePlayer, callback
+
 send = (host, port, data, parser, callback) ->
+  udp = dgram.createSocket 'udp4'
+
   udp.on 'error', (err) ->
     throw err if err?
 
   udp.on 'message', (response) ->
+    udp.close()
     callback parser response
 
   packet = Buffer.concat [
@@ -246,4 +287,4 @@ send = (host, port, data, parser, callback) ->
 
   udp.send packet, 0, packet.length, port, host
 
-module.exports = info: info, challenge: challenge
+module.exports = info: info, challenge: challenge, player: player
